@@ -556,10 +556,8 @@ static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root, xmlNode *
 			if (xmlStrcmp(attr->name, Char2xmlChar("PdoUpload")) == 0)
 				general->coe_enable_upload_start = parse_boolean(attr->children->content);
 
-			if (xmlStrcmp(attr->name, Char2xmlChar("??sdoComplete")) == 0)
+			if (xmlStrcmp(attr->name, Char2xmlChar("CompleteAccess")) == 0)
 				general->coe_enable_sdo_complete = parse_boolean(attr->children->content);
-
-			//attr = attr->next;
 		}
 	}
 
