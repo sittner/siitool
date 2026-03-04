@@ -173,6 +173,14 @@ static unsigned char * read_input(FILE *f, unsigned char *bufptr, size_t *size)
 
 	if (bufptr == NULL) {
 		buffer = malloc(capacity);
+	} else {
+		buffer = bufptr;
+	}
+
+	if (buffer == NULL) {
+		fprintf(stderr, "Error, failed to allocate input buffer\n");
+		*size = 0;
+		return NULL;
 	}
 
 	while ((input=fgetc(f)) != EOF) {
@@ -200,6 +208,10 @@ static unsigned char * read_input(FILE *f, unsigned char *bufptr, size_t *size)
 static int parse_xml_input(const unsigned char *buffer, size_t length, unsigned int device, const char *output)
 {
 	EsiData *esi = esi_init_string(buffer, length);
+	if (esi == NULL) {
+		fprintf(stderr, "Error, failed to initialize ESI data from input\n");
+		return -1;
+	}
 	//esi_print_xml(esi);
 
 	int include_pdo_strings = g_add_pdo_mapping || g_print_content;
@@ -210,6 +222,11 @@ static int parse_xml_input(const unsigned char *buffer, size_t length, unsigned 
 	}
 
 	SiiInfo *sii = esi_get_sii(esi);
+	if (sii == NULL) {
+		fprintf(stderr, "Error, failed to get SII data from ESI\n");
+		esi_release(esi);
+		return -1;
+	}
 	sii_cat_sort(sii);
 	if (g_print_content) {
 		sii_print(sii);
@@ -234,6 +251,11 @@ static int parse_sii_input(const unsigned char *buffer, const char *output)
 {
 	SiiInfo *sii = sii_init_string(buffer, 1024);
 	//alternative: SiiInfo *sii = sii_init_file(filename) */
+
+	if (sii == NULL) {
+		fprintf(stderr, "Error, failed to parse SII input data\n");
+		return -1;
+	}
 
 	if (g_print_content)
 		sii_print(sii);
@@ -277,6 +299,11 @@ int main(int argc, char *argv[])
 				return 0;
 			} else if (argv[i][1] == 'o') {
 				i++;
+				if (i >= argc) {
+					fprintf(stderr, "Error, -o requires an argument\n");
+					printhelp(base(argv[0]));
+					return -1;
+				}
 				output = malloc(strlen(argv[i])+1);
 				memmove(output, argv[i], strlen(argv[i])+1);
 			} else if (argv[i][1] == 'p') {
@@ -286,7 +313,12 @@ int main(int argc, char *argv[])
 			} else if (argv[i][1] == 'c') {
 				g_add_dc_section = 1;
 			} else if (argv[i][1] == 'd') {
-				sscanf(argv[i+1], "%d", &device);
+				if (i + 1 >= argc) {
+					fprintf(stderr, "Error, -d requires an argument\n");
+					printhelp(base(argv[0]));
+					return -1;
+				}
+				sscanf(argv[++i], "%d", &device);
 			} else if (argv[i][1] == '\0') { /* read from stdin (default) */
 				filename = NULL;
 			} else {
