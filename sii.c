@@ -1077,7 +1077,7 @@ static struct _sii_cat *sii_category_find_neighbor(struct _sii_cat *cat, enum eS
 		sc = sc->prev;
 
 	/* search */
-	while (sc->next != NULL) {
+	while (sc != NULL) {
 		if (sc->type == sec)
 			return sc;
 
@@ -1098,26 +1098,30 @@ static void cat_print_general(struct _sii_cat *cat)
 
 	printf("  Vendor Specific (Index of String)\n");
 
-	tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->nameindex);
-	if (NULL == tmpstr)
-		tmpstr = "not set";
-	printf("    Name  Index: %d: ............. %s\n", gen->nameindex,  tmpstr);
+	if (sc == NULL || sc->data == NULL) {
+		printf("    (no string category found)\n");
+	} else {
+		tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->nameindex);
+		if (NULL == tmpstr)
+			tmpstr = "not set";
+		printf("    Name  Index: %d: ............. %s\n", gen->nameindex,  tmpstr);
 
-	tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->groupindex);
-	if (NULL == tmpstr)
-		tmpstr = "not set";
-	printf("    Group Index: %d: ............. %s\n", gen->groupindex, tmpstr);
+		tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->groupindex);
+		if (NULL == tmpstr)
+			tmpstr = "not set";
+		printf("    Group Index: %d: ............. %s\n", gen->groupindex, tmpstr);
 
-	tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->imageindex);
-	if (NULL == tmpstr)
-		tmpstr = "not set";
-	printf("    Image Index: %d: ............. %s\n", gen->imageindex, tmpstr);
+		tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->imageindex);
+		if (NULL == tmpstr)
+			tmpstr = "not set";
+		printf("    Image Index: %d: ............. %s\n", gen->imageindex, tmpstr);
 
-	tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->orderindex);
-	if (NULL == tmpstr)
-		tmpstr = "not set";
-	printf("    Order Index: %d: ............. %s\n", gen->orderindex, tmpstr);
-	tmpstr = NULL;
+		tmpstr = string_search_id((struct _sii_strings *)(sc->data), gen->orderindex);
+		if (NULL == tmpstr)
+			tmpstr = "not set";
+		printf("    Order Index: %d: ............. %s\n", gen->orderindex, tmpstr);
+		tmpstr = NULL;
+	}
 	printf("\n");
 
 	printf("  CoE Details:\n");
@@ -1301,7 +1305,10 @@ static void cat_print_pdo(struct _sii_cat *cat)
 	const char *tmpstr = NULL;
 
 	while (list != NULL) {
-		tmpstr = string_search_id((struct _sii_strings *)(sc->data), list->string_index);
+		if (sc != NULL && sc->data != NULL)
+			tmpstr = string_search_id((struct _sii_strings *)(sc->data), list->string_index);
+		else
+			tmpstr = NULL;
 		if (NULL == tmpstr)
 			tmpstr = "not set";
 
@@ -1326,8 +1333,16 @@ static void cat_print_dc(struct _sii_cat *cat)
 
 	struct _sii_dclock *dc = (struct _sii_dclock *)cat->data;
 	struct _sii_cat *sc = sii_category_find_neighbor(cat, SII_CAT_STRINGS);
-	const char *name = string_search_id((struct _sii_strings *)sc->data, dc->nameIdx);
-	const char *desc = string_search_id((struct _sii_strings *)sc->data, dc->descIdx);
+	const char *name = NULL;
+	const char *desc = NULL;
+
+	if (sc != NULL && sc->data != NULL) {
+		name = string_search_id((struct _sii_strings *)sc->data, dc->nameIdx);
+		desc = string_search_id((struct _sii_strings *)sc->data, dc->descIdx);
+	}
+
+	if (name == NULL) name = "not set";
+	if (desc == NULL) desc = "not set";
 
 	printf("  Cycle Time 0 .................. %d\n", dc->cycleTime0);
 	printf("  Shift Time 0 .................. %d\n", dc->shiftTime0);
@@ -1962,6 +1977,9 @@ SiiInfo *sii_init_file(const char *filename)
 
 void sii_release(SiiInfo *sii)
 {
+	if (sii == NULL)
+		return;
+
 	while (cat_rm(sii) != 1)
 		;
 
@@ -1982,6 +2000,21 @@ void sii_release(SiiInfo *sii)
 
 size_t sii_generate(SiiInfo *sii, unsigned int add_pdo_mapping, unsigned int add_dc_config)
 {
+	if (sii == NULL) {
+		fprintf(stderr, "Error, sii is NULL in sii_generate\n");
+		return 0;
+	}
+
+	if (sii->config == NULL) {
+		fprintf(stderr, "Error, sii config is not set\n");
+		return 0;
+	}
+
+	if (sii->preamble == NULL) {
+		fprintf(stderr, "Error, sii preamble is not set\n");
+		return 0;
+	}
+
 	size_t maxsize = EE_TO_BYTES(sii->config->eeprom_size);
 	sii->rawbytes = (uint8_t*) calloc(1, maxsize);
 	sii->rawsize = 0;
@@ -1994,6 +2027,10 @@ size_t sii_generate(SiiInfo *sii, unsigned int add_pdo_mapping, unsigned int add
 
 void sii_print(SiiInfo *sii)
 {
+	if (sii == NULL) {
+		fprintf(stderr, "Error, sii is NULL in sii_print\n");
+		return;
+	}
 	printf("First print preamble and config\n");
 	struct _sii_preamble *preamble = sii->preamble;
 
@@ -2057,12 +2094,21 @@ void sii_print(SiiInfo *sii)
 
 int sii_check(SiiInfo *sii)
 {
+	if (sii == NULL) {
+		fprintf(stderr, "Error, sii is NULL in sii_check\n");
+		return -1;
+	}
 	fprintf(stderr, "Not yet implemented\n");
 	return sii->rawvalid;
 }
 
 int sii_write_bin(SiiInfo *sii, const char *outfile)
 {
+	if (sii == NULL) {
+		fprintf(stderr, "Error, sii is NULL in sii_write_bin\n");
+		return -1;
+	}
+
 	if (!sii->rawvalid) {
 		fprintf(stderr, "Error, raw string is invalid\n");
 		return -1;
@@ -2150,6 +2196,9 @@ int strings_add(struct _sii_strings *strings, const char *entry)
 
 const char *string_search_id(struct _sii_strings *strings, int id)
 {
+	if (strings == NULL)
+		return NULL;
+
 	for (struct _string *s = strings->head; s; s = s->next) {
 		if (s->id == id)
 			return s->data;
@@ -2160,6 +2209,9 @@ const char *string_search_id(struct _sii_strings *strings, int id)
 
 int string_search_string(struct _sii_strings *strings, const char *str)
 {
+	if (strings == NULL)
+		return -1;
+
 	for (struct _string *s = strings->head; s; s = s->next) {
 		if (strncmp(s->data, str, strlen(str)) == 0)
 			return s->id;
@@ -2199,6 +2251,10 @@ char *cat2string(enum eSection cat)
 
 void sii_cat_sort(SiiInfo *sii)
 {
+	if (sii == NULL) {
+		fprintf(stderr, "Error, sii is NULL in sii_cat_sort\n");
+		return;
+	}
 	struct _sii_cat *head = sii->cat_head;
 	struct _sii_cat *min = NULL;
 	struct _sii_cat *new = NULL;
