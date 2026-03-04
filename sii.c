@@ -71,6 +71,10 @@ static int read_eeprom(FILE *f, unsigned char *buffer, size_t size)
 static struct _sii_preamble * parse_preamble(const unsigned char *buffer, size_t size)
 {
 	struct _sii_preamble *preamble = calloc(1, sizeof(struct _sii_preamble));
+	if (preamble == NULL) {
+		fprintf(stderr, "Error: failed to allocate memory for SII preamble\n");
+		return NULL;
+	}
 
 	size_t count = 0;
 	uint8_t crc = 0xff; /* init value for crc */
@@ -135,7 +139,10 @@ static struct _sii_stdconfig *parse_stdconfig(const unsigned char *buffer, size_
 	const unsigned char *b = buffer;
 
 	struct _sii_stdconfig *stdc = calloc(1, sizeof(struct _sii_stdconfig));
-
+	if (stdc == NULL) {
+		fprintf(stderr, "Error: failed to allocate memory for SII standard config\n");
+		return NULL;
+	}
 	stdc->vendor_id = BYTES_TO_DWORD(*(b+0), *(b+1), *(b+2), *(b+3));
 	b+=4;
 	stdc->product_id = BYTES_TO_DWORD(*(b+0), *(b+1), *(b+2), *(b+3));
@@ -184,9 +191,18 @@ static struct _sii_stdconfig *parse_stdconfig(const unsigned char *buffer, size_
 static struct _string *string_new(const char *string, size_t size)
 {
 	struct _string *new = calloc(1, sizeof(struct _string));
+	if (new == NULL) {
+		fprintf(stderr, "Error: failed to allocate memory for new string entry\n");
+		return NULL;
+	}
 
 	new->length = size;
 	new->data = malloc(size+1);
+	if (new->data == NULL) {
+		fprintf(stderr, "Error: failed to allocate memory for string data\n");
+		free(new);
+		return NULL;
+	}
 	memmove(new->data, string, size);
 	new->data[size] = 0;
 
@@ -195,6 +211,9 @@ static struct _string *string_new(const char *string, size_t size)
 
 static void strings_entry_add(struct _sii_strings *str, struct _string *new)
 {
+	if (new == NULL)
+		return;
+
 	if (str->head == NULL) { /* first entry */
 		str->head = new;
 		new->id = 1;
@@ -899,6 +918,10 @@ static struct _sii_cat *cat_new_data(uint16_t type, uint16_t size, void *data)
 static struct _sii_cat *cat_new(uint16_t type, uint16_t size)
 {
 	struct _sii_cat *new = calloc(1, sizeof(struct _sii_cat));
+	if (new == NULL) {
+		fprintf(stderr, "Error: failed to allocate memory for new SII category\n");
+		return NULL;
+	}
 
 	new->type   = type&0x7fff;
 	new->vendor = (type>>16)&0x1;
@@ -1395,6 +1418,11 @@ static uint16_t sii_cat_write_general(struct _sii_cat *cat, unsigned char *buf)
 	printf("DEBUG Categorie general is %lu bytes\n", size);
 #endif
 
+	if (cat->data == NULL) {
+		fprintf(stderr, "Error: cannot write General category - section data is missing\n");
+		return 0;
+	}
+
 	struct _sii_general *bcat = (struct _sii_general *)cat->data;
 
 	*b++ = bcat->groupindex;
@@ -1440,6 +1468,10 @@ static uint16_t sii_cat_write_general(struct _sii_cat *cat, unsigned char *buf)
 static uint16_t sii_cat_write_fmmu(struct _sii_cat *cat, unsigned char *buf)
 {
 	unsigned char *b = buf;
+	if (cat->data == NULL) {
+		fprintf(stderr, "Error: cannot write FMMU category - section data is missing\n");
+		return 0;
+	}
 	struct _sii_fmmu *data = cat->data;
 	struct _fmmu_entry *entry = data->list;
 
@@ -1459,6 +1491,10 @@ static uint16_t sii_cat_write_fmmu(struct _sii_cat *cat, unsigned char *buf)
 static uint16_t sii_cat_write_syncm(struct _sii_cat *cat, unsigned char *buf)
 {
 	unsigned char *b = buf;
+	if (cat->data == NULL) {
+		fprintf(stderr, "Error: cannot write SyncManager category - section data is missing\n");
+		return 0;
+	}
 	struct _sii_syncm *sm = cat->data;
 	struct _syncm_entry *entry = sm->list;
 
@@ -1481,6 +1517,10 @@ static uint16_t sii_cat_write_syncm(struct _sii_cat *cat, unsigned char *buf)
 static uint16_t sii_cat_write_pdo(struct _sii_cat *cat, unsigned char *buf)
 {
 	unsigned char *b = buf;
+	if (cat->data == NULL) {
+		fprintf(stderr, "Error: cannot write PDO category - section data is missing\n");
+		return 0;
+	}
 	struct _sii_pdo *pdo = cat->data;
 
 	*b++ = pdo->index&0xff;
@@ -1514,6 +1554,10 @@ static uint16_t sii_cat_write_dc(struct _sii_cat *cat, unsigned char *buf)
 {
 #if 1
 	unsigned char *b = buf;
+	if (cat->data == NULL) {
+		fprintf(stderr, "Error: cannot write DC Clock category - section data is missing\n");
+		return 0;
+	}
 	struct _sii_dclock *dc = cat->data;
 
 	*b++ = dc->cycleTime0&0xff;
@@ -1759,6 +1803,10 @@ static void sii_write(SiiInfo *sii, unsigned int add_pdo_mapping, unsigned int a
 
 	// - write preamble
 	struct _sii_preamble *pre = sii->preamble;
+	if (pre == NULL) {
+		fprintf(stderr, "Error: cannot write SII binary - preamble data is missing\n");
+		return;
+	}
 	*outbuf = pre->pdi_ctrl&0xff;
 	crc8byte(&crc, *outbuf);
 	outbuf++;
@@ -1819,6 +1867,10 @@ static void sii_write(SiiInfo *sii, unsigned int add_pdo_mapping, unsigned int a
 
 	// - write standard config
 	struct _sii_stdconfig *scfg = sii->config;
+	if (scfg == NULL) {
+		fprintf(stderr, "Error: cannot write SII binary - standard config data is missing\n");
+		return;
+	}
 
 	*outbuf = scfg->vendor_id&0xff;
 	outbuf++;

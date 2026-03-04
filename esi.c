@@ -437,6 +437,11 @@ static struct _sii_stdconfig *parse_config(xmlNode *root, xmlNode *device)
 
 	/* fetch eeprom size */
 	tmp = search_node(n, "ByteSize");
+	if (tmp == NULL || tmp->children == NULL) {
+		fprintf(stderr, "Error: XML element <ByteSize> not found inside mailbox configuration\n");
+		free(sc);
+		return NULL;
+	}
 	/* convert byte -> kbyte */
 	sc->eeprom_size = BYTES_TO_EE(atoi((char *)tmp->children->content));
 	sc->version = 1; /* also not in Esi */
@@ -479,15 +484,35 @@ static struct _sii_general *parse_general(SiiInfo *sii, xmlNode *root, xmlNode *
 	 */
 
 	parent = search_node(root, "Groups");
+	if (parent == NULL) {
+		fprintf(stderr, "Error: required XML element <Groups> not found in ESI file\n");
+		return general;
+	}
 	node = search_node(parent, "Group");
+	if (node == NULL) {
+		fprintf(stderr, "Error: required XML element <Group> not found inside <Groups>\n");
+		return general;
+	}
 	tmp = search_node(node, "Type");
-	general->groupindex = sii_strings_add(sii, (const char *)tmp->children->content);
+	if (tmp == NULL) {
+		fprintf(stderr, "Error: required XML element <Type> not found inside <Group>\n");
+	} else if (tmp->children == NULL) {
+		fprintf(stderr, "Error: XML element <Type> is empty (no text content)\n");
+	} else {
+		general->groupindex = sii_strings_add(sii, (const char *)tmp->children->content);
+	}
 
 	general->imageindex = 0;
 	general->orderindex = 0;
 
 	tmp = search_node(device, "Name"); /* FIXME check language id and use the english version LcId="1033" */
-	general->nameindex = sii_strings_add(sii, (const char *)tmp->children->content);
+	if (tmp == NULL) {
+		fprintf(stderr, "Error: required XML element <Name> not found in <Device>\n");
+	} else if (tmp->children == NULL) {
+		fprintf(stderr, "Error: XML element <Name> is empty (no text content)\n");
+	} else {
+		general->nameindex = sii_strings_add(sii, (const char *)tmp->children->content);
+	}
 
 	/* reset temporial nodes */
 	parent = NULL;
@@ -1006,6 +1031,9 @@ EsiData *esi_init_string(const unsigned char *buf, size_t size)
 
 void esi_release(struct _esi_data *esi)
 {
+	if (esi == NULL)
+		return;
+
 	xmlFreeDoc(esi->doc);
 
 	if (esi->sii != NULL)
@@ -1025,6 +1053,11 @@ void esi_release(struct _esi_data *esi)
 
 int esi_parse(EsiData *esi, int device_number, int include_pdo_strings)
 {
+	if (esi == NULL) {
+		fprintf(stderr, "Error: cannot parse ESI data - ESI context is NULL\n");
+		return -1;
+	}
+
 	xmlNode *root = xmlDocGetRootElement(esi->doc);
 
 	/* first, prepare category strings, since this is always needed */
@@ -1043,8 +1076,16 @@ int esi_parse(EsiData *esi, int device_number, int include_pdo_strings)
 		return -1;
 	}
 	xmlNode *n = search_node(device, "ConfigData");
+	if (n == NULL) {
+		fprintf(stderr, "Error: required XML element <ConfigData> not found in <Device>\n");
+		return -1;
+	}
 	esi->sii->preamble = parse_preamble(n);
 	esi->sii->config = parse_config(root, device);
+	if (esi->sii->config == NULL) {
+		fprintf(stderr, "Error: failed to parse device configuration from ESI XML\n");
+		return -1;
+	}
 
 	struct _sii_general *general = parse_general(esi->sii, root, device);
 	struct _sii_cat *gencat = calloc(1, sizeof(struct _sii_cat));
@@ -1090,5 +1131,9 @@ void esi_print_sii(EsiData *esi)
 
 SiiInfo *esi_get_sii(EsiData *esi)
 {
+	if (esi == NULL) {
+		fprintf(stderr, "Error: cannot get SII data - ESI context is NULL\n");
+		return NULL;
+	}
 	return esi->sii;
 }
